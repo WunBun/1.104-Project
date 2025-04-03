@@ -261,11 +261,11 @@ class PID():
 
 gravity = AppliedForce(0, 100, lambda t: 9.8)
 
-wind1 = AppliedForce(0, 100, lambda t: 5 * np.sin(1 * t), [1, 0, 0])
+wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
 
-wind2 = AppliedForce(0, 100, lambda t: 10 * np.cos(2 * t), [0, 1, 0])
+wind2 = AppliedForce(0, 100, lambda t: 4 * np.cos(4 * 2 * np.pi * t), [0, 1, 0])
 
-forces = {gravity} # {gravity, wind1, wind2}
+forces = {gravity, wind1, wind2}
 
 SC = 3.5 / 10e3 # * 10e6 # concrete yield strength
 SS = 100 / 10e3 # * 10e6 # steel yield strength
@@ -321,15 +321,22 @@ elts = [
 #     PID(Kp, Ki, Kd, elts[15]),
 # }
 
-Kp = 0.004
-Ki = 0.001
-Kd = -0.006
+# PIDs = {
+#                 PID(Kp, Ki, Kd, elts[12], lambda: (points[1].velocity - [-2, -1, 0]) @ elts[12].dir()),
+#                 PID(Kp, Ki, Kd, elts[13], lambda: (points[2].velocity - [2, -1, 0]) @ elts[13].dir()),
+#                 PID(Kp, Ki, Kd, elts[14], lambda: (points[5].velocity - [-2, 1, 0]) @ elts[14].dir()),
+#                 PID(Kp, Ki, Kd, elts[15], lambda: (points[6].velocity - [2, 1, 0]) @ elts[15].dir()),
+#             }
+
+Kp = 0
+Ki = 0
+Kd = 0
 
 PIDs = {
-                PID(Kp, Ki, Kd, elts[12], lambda: (points[1].coords - [-2, -1, 0]) @ elts[12].dir()),
-                PID(Kp, Ki, Kd, elts[13], lambda: (points[2].coords - [2, -1, 0]) @ elts[13].dir()),
-                PID(Kp, Ki, Kd, elts[14], lambda: (points[5].coords - [-2, 1, 0]) @ elts[14].dir()),
-                PID(Kp, Ki, Kd, elts[15], lambda: (points[6].coords - [2, 1, 0]) @ elts[15].dir()),
+                PID(Kp, Ki, Kd, elts[12], lambda: (points[1].velocity) @ elts[12].dir()),
+                PID(Kp, Ki, Kd, elts[13], lambda: (points[2].velocity) @ elts[13].dir()),
+                PID(Kp, Ki, Kd, elts[14], lambda: (points[5].velocity) @ elts[14].dir()),
+                PID(Kp, Ki, Kd, elts[15], lambda: (points[6].velocity) @ elts[15].dir()),
             }
 
 struct = Structure(elts, PIDs)
@@ -345,9 +352,9 @@ dt = 0.05
 # best_PID = None
 # best_squerror = None
 
-# for P in np.arange(0, 0.005, 0.001):
+# for P in np.arange(0, 0.055, 0.005):
 #     for I in np.arange(0, 0.005, 0.001):
-#         for D in np.arange(-0.01, 0.01, 0.002):
+#         for D in np.arange(0, 0.055, 0.005):
 #             points = {
 #                 0: Point(-6, -1, 0, True, 0, forces),
 #                 1: Point(-2, -1, 0, False, 1, forces), #
@@ -386,10 +393,10 @@ dt = 0.05
 #             ]
 
 #             PIDs = {
-#                 PID(P, I, D, elts[12], lambda: (points[1].coords - [-2, -1, 0]) @ elts[12].dir()),
-#                 PID(P, I, D, elts[13], lambda: (points[2].coords - [2, -1, 0]) @ elts[13].dir()),
-#                 PID(P, I, D, elts[14], lambda: (points[5].coords - [-2, 1, 0]) @ elts[14].dir()),
-#                 PID(P, I, D, elts[15], lambda: (points[6].coords - [2, 1, 0]) @ elts[15].dir()),
+#                 PID(P, I, D, elts[12], lambda: (points[1].velocity) @ elts[12].dir()),
+#                 PID(P, I, D, elts[13], lambda: (points[2].velocity) @ elts[13].dir()),
+#                 PID(P, I, D, elts[14], lambda: (points[5].velocity) @ elts[14].dir()),
+#                 PID(P, I, D, elts[15], lambda: (points[6].velocity) @ elts[15].dir()),
 #             }
 
 #             struct = Structure(elts, PIDs)
@@ -407,7 +414,7 @@ dt = 0.05
 # print(best_squerror)
 
 
-with imageio.get_writer(f'{(Kp, Ki, Kd)}-.gif', mode='I', fps = math.floor(1/dt)) as writer:
+with imageio.get_writer(f'{(Kp, Ki, Kd)}.gif', mode='I', fps = math.floor(1/dt)) as writer:
     for i in range(vid_len):
         struct.timestep(dt)
         struct.plot(i = i)
@@ -429,5 +436,5 @@ for controller in PIDs:
     ax.plot(
         controller.evec
     )
-plt.savefig(f"{(Kp, Ki, Kd)}-.png", dpi=300)
-plt.savefig(f"{(Kp, Ki, Kd)}-.pdf")
+plt.savefig(f"{(Kp, Ki, Kd)}.png", dpi=300)
+plt.savefig(f"{(Kp, Ki, Kd)}.pdf")
