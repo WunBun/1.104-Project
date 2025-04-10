@@ -19,6 +19,8 @@ class Point():
 
         self.velocity = np.array([0., 0., 0.])
 
+        self.acceleration = np.array([0., 0., 0.])
+
         self.connected = set()
 
     def dir(self, other):
@@ -114,7 +116,8 @@ class Structure():
 
         for point in self.points:
             if not point.fixed:
-                point.velocity += dt * (applied_forces[point.index] + structural_forces[point.index]) / point.mass - dt * (damping/point.mass) * point.velocity
+                point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
+                point.velocity += dt * point.acceleration
         
         return applied_forces, structural_forces
     
@@ -219,34 +222,39 @@ class AppliedForce():
         
 
 class Listener:
-    def __init__(self, location=None, alpha=0.1, noise_std=0.05, add_noise=True):
+    def __init__(self, parent = None, alpha = 0.1, noise_std = 0.05, add_noise = True):
         
-        self.location = location
+        self.parent = parent
         self.alpha = alpha
         self.noise_std = noise_std
         self.add_noise = add_noise
 
-        self.smoothed_force = 0.0
-        self.raw_forces = []
-        self.smoothed_forces = []
+        self.accels_vec = []
+        self.smoothed_accels_vec = []
 
-    def observe(self, forces):
+        self.smoothed_accel = 0.0
+
+        # self.smoothed_force = 0.0
+        # self.raw_forces = []
+        # self.smoothed_forces = []
+
+    def observe(self):
         
-        net_force = sum(forces)
+        accel = self.parent.acceleration
 
         if self.add_noise:
-            net_force += np.random.normal(0, self.noise_std)
+            accel += np.random.normal(0, self.noise_std)
 
-        self.raw_forces.append(net_force)
+        self.accels_vec.append(accel)
 
         # EMA filter
-        if len(self.smoothed_forces) == 0:
-            smoothed = net_force
+        if len(self.smoothed_accels_vec) == 0:
+            smoothed = accel
         else:
-            smoothed = self.alpha * net_force + (1 - self.alpha) * self.smoothed_force
+            smoothed = self.alpha * accel + (1 - self.alpha) * self.smoothed_accel
 
-        self.smoothed_force = smoothed
-        self.smoothed_forces.append(smoothed)
+        self.smoothed_accel = smoothed
+        self.smoothed_accels_vec.append(smoothed)
 
 
 
