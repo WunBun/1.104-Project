@@ -64,10 +64,10 @@ class LineElement():
             return self.y
     
 class Structure():
-    def __init__(self, elements, PIDs):
+    def __init__(self, elements, PIDs, sensors):
         self.elements = elements
         self.points = {elt.start for elt in elements} | {elt.end for elt in elements}
-
+        self.sensors = sensors
         self.PIDs = PIDs
 
         self.C = self.create_connectivity_mat()
@@ -118,6 +118,9 @@ class Structure():
             if not point.fixed:
                 point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
                 point.velocity += dt * point.acceleration
+
+        for sensor in self.sensors: 
+            sensor.observe() # update the acceleration that each sensor reads
         
         return applied_forces, structural_forces
     
@@ -221,7 +224,7 @@ class AppliedForce():
             return self.magnitude(t) * self.dir
         
 
-class Listener:
+class Sensor:
     def __init__(self, parent = None, alpha = 0.1, noise_std = 0.05, add_noise = True):
         
         self.parent = parent
@@ -238,7 +241,7 @@ class Listener:
         # self.raw_forces = []
         # self.smoothed_forces = []
 
-    def observe(self):
+    def observe(self): # called by the struct update timestep function
         
         accel = self.parent.acceleration
 
@@ -373,14 +376,28 @@ Kp = 0
 Ki = 0
 Kd = 0
 
+sensors = {
+    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
+}
+
+# PIDs = {
+#                 PID(Kp, Ki, Kd, elts[12], lambda: (points[1].velocity) @ elts[12].dir()),
+#                 PID(Kp, Ki, Kd, elts[13], lambda: (points[2].velocity) @ elts[13].dir()),
+#                 PID(Kp, Ki, Kd, elts[14], lambda: (points[5].velocity) @ elts[14].dir()),
+#                 PID(Kp, Ki, Kd, elts[15], lambda: (points[6].velocity) @ elts[15].dir()),
+#             }
+
 PIDs = {
-                PID(Kp, Ki, Kd, elts[12], lambda: (points[1].velocity) @ elts[12].dir()),
-                PID(Kp, Ki, Kd, elts[13], lambda: (points[2].velocity) @ elts[13].dir()),
-                PID(Kp, Ki, Kd, elts[14], lambda: (points[5].velocity) @ elts[14].dir()),
-                PID(Kp, Ki, Kd, elts[15], lambda: (points[6].velocity) @ elts[15].dir()),
+                PID(Kp, Ki, Kd, elts[12], lambda: sensors[1].smoothed_accel * points[1].dir @ elts[12].dir()),
+                PID(Kp, Ki, Kd, elts[13], lambda: sensors[2].smoothed_accel * points[2].dir @ elts[13].dir()),
+                PID(Kp, Ki, Kd, elts[14], lambda: sensors[5].smoothed_accel * points[5].dir @ elts[14].dir()),
+                PID(Kp, Ki, Kd, elts[15], lambda: sensors[6].smoothed_accel * points[6].dir @ elts[15].dir()),
             }
 
-struct = Structure(elts, PIDs)
+struct = Structure(elts, PIDs, sensors)
 
 # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 
@@ -390,69 +407,76 @@ struct = Structure(elts, PIDs)
 vid_len = 600
 dt = 0.05
 
-# best_PID = None
-# best_squerror = None
+best_PID = None
+best_squerror = None
 
-# for P in np.arange(0, 0.055, 0.005):
-#     for I in np.arange(0, 0.005, 0.001):
-#         for D in np.arange(0, 0.055, 0.005):
-#             points = {
-#                 0: Point(-6, -1, 0, True, 0, forces),
-#                 1: Point(-2, -1, 0, False, 1, forces), #
-#                 2: Point(2, -1, 0, False, 2, forces), #
-#                 3: Point(6, -1, 0, True, 3, forces),
-#                 4: Point(-6, 1, 0, True, 4, forces),
-#                 5: Point(-2, 1, 0, False, 5, forces), #
-#                 6: Point(2, 1, 0, False, 6, forces), #
-#                 7: Point(6, 1, 0, True, 7, forces),
+for P in np.arange(0, 0.055, 0.005):
+    for I in np.arange(0, 0.005, 0.001):
+        for D in np.arange(0, 0.055, 0.005):
+            points = {
+                0: Point(-6, -1, 0, True, 0, forces),
+                1: Point(-2, -1, 0, False, 1, forces), #
+                2: Point(2, -1, 0, False, 2, forces), #
+                3: Point(6, -1, 0, True, 3, forces),
+                4: Point(-6, 1, 0, True, 4, forces),
+                5: Point(-2, 1, 0, False, 5, forces), #
+                6: Point(2, 1, 0, False, 6, forces), #
+                7: Point(6, 1, 0, True, 7, forces),
 
-#                 8: Point(0, -1, -8, True, 8, forces),
-#                 9: Point(0, 1, -8, True, 9, forces),
-#                 10: Point(0, -1, 4, False, 10, forces),
-#                 11: Point(0, 1, 4, False, 11, forces),
-#             }
+                8: Point(0, -1, -8, True, 8, forces),
+                9: Point(0, 1, -8, True, 9, forces),
+                10: Point(0, -1, 4, False, 10, forces),
+                11: Point(0, 1, 4, False, 11, forces),
+            }
 
-#             elts = [
-#                 LineElement(points[0], points[1], CE, SC, 1), # concrete
-#                 LineElement(points[1], points[2], CE, SC, 1),
-#                 LineElement(points[2], points[3], CE, SC, 1),
-#                 LineElement(points[4], points[5], CE, SC, 1),
-#                 LineElement(points[5], points[6], CE, SC, 1),
-#                 LineElement(points[6], points[7], CE, SC, 1),
-#                 LineElement(points[0], points[4], CE, SC, 1),
-#                 LineElement(points[1], points[5], CE, SC, 1),
-#                 LineElement(points[2], points[6], CE, SC, 1),
-#                 LineElement(points[3], points[7], CE, SC, 1),
+            elts = [
+                LineElement(points[0], points[1], CE, SC, 1), # concrete
+                LineElement(points[1], points[2], CE, SC, 1),
+                LineElement(points[2], points[3], CE, SC, 1),
+                LineElement(points[4], points[5], CE, SC, 1),
+                LineElement(points[5], points[6], CE, SC, 1),
+                LineElement(points[6], points[7], CE, SC, 1),
+                LineElement(points[0], points[4], CE, SC, 1),
+                LineElement(points[1], points[5], CE, SC, 1),
+                LineElement(points[2], points[6], CE, SC, 1),
+                LineElement(points[3], points[7], CE, SC, 1),
 
-#                 LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
-#                 LineElement(points[9], points[11], 1000, SS, 0.25),
+                LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
+                LineElement(points[9], points[11], 1000, SS, 0.25),
 
-#                 LineElement(points[10], points[1], SE, SS, 0.01), # steel
-#                 LineElement(points[10], points[2], SE, SS, 0.01),
-#                 LineElement(points[11], points[5], SE, SS, 0.01),
-#                 LineElement(points[11], points[6], SE, SS, 0.01),
-#             ]
+                LineElement(points[10], points[1], SE, SS, 0.01), # steel
+                LineElement(points[10], points[2], SE, SS, 0.01),
+                LineElement(points[11], points[5], SE, SS, 0.01),
+                LineElement(points[11], points[6], SE, SS, 0.01),
+            ]
 
-#             PIDs = {
-#                 PID(P, I, D, elts[12], lambda: (points[1].velocity) @ elts[12].dir()),
-#                 PID(P, I, D, elts[13], lambda: (points[2].velocity) @ elts[13].dir()),
-#                 PID(P, I, D, elts[14], lambda: (points[5].velocity) @ elts[14].dir()),
-#                 PID(P, I, D, elts[15], lambda: (points[6].velocity) @ elts[15].dir()),
-#             }
+            sensors = {
+                1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
+            }
 
-#             struct = Structure(elts, PIDs)
+            PIDs = {
+                PID(Kp, Ki, Kd, elts[12], lambda: sensors[1].smoothed_accel * points[1].dir @ elts[12].dir()),
+                PID(Kp, Ki, Kd, elts[13], lambda: sensors[2].smoothed_accel * points[2].dir @ elts[13].dir()),
+                PID(Kp, Ki, Kd, elts[14], lambda: sensors[5].smoothed_accel * points[5].dir @ elts[14].dir()),
+                PID(Kp, Ki, Kd, elts[15], lambda: sensors[6].smoothed_accel * points[6].dir @ elts[15].dir()),
+            }
 
-#             for i in range(vid_len):
-#                 struct.timestep(dt)
+            struct = Structure(elts, PIDs, sensors)
 
-#             sqerror = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs) * 10
+            for i in range(vid_len):
+                struct.timestep(dt)
 
-#             if not best_PID or sqerror < best_squerror:
-#                 best_PID = (P, I, D)
-#                 best_squerror = sqerror
+            sqerror = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs) * 10
 
-# print(best_PID)
-# print(best_squerror)
+            if not best_PID or sqerror < best_squerror:
+                best_PID = (P, I, D)
+                best_squerror = sqerror
+
+print(best_PID)
+print(best_squerror)
 
 
 with imageio.get_writer(f'{(Kp, Ki, Kd)}.gif', mode='I', fps = math.floor(1/dt)) as writer:
