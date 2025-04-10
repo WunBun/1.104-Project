@@ -217,6 +217,39 @@ class AppliedForce():
         else:
             return self.magnitude(t) * self.dir
         
+
+class Listener:
+    def __init__(self, location=None, alpha=0.1, noise_std=0.05, add_noise=True):
+        
+        self.location = location
+        self.alpha = alpha
+        self.noise_std = noise_std
+        self.add_noise = add_noise
+
+        self.smoothed_force = 0.0
+        self.raw_forces = []
+        self.smoothed_forces = []
+
+    def observe(self, forces):
+        
+        net_force = sum(forces)
+
+        if self.add_noise:
+            net_force += np.random.normal(0, self.noise_std)
+
+        self.raw_forces.append(net_force)
+
+        # EMA filter
+        if len(self.smoothed_forces) == 0:
+            smoothed = net_force
+        else:
+            smoothed = self.alpha * net_force + (1 - self.alpha) * self.smoothed_force
+
+        self.smoothed_force = smoothed
+        self.smoothed_forces.append(smoothed)
+
+
+
 class PID():
     def __init__(self, Kp, Ki, Kd, elt, error_func = None):
         self.Kp = Kp
