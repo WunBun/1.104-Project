@@ -19,7 +19,7 @@ class Point():
         self.acceleration = np.array([0., 0., 0.])
         self.connected = set()
 
-    def dir(self, other):
+    def dir(self, other): # vector pointing from this point to another point
         d = [other.coords[i] - self.coords[i] for i in range(3)]
         u_d = d / np.linalg.norm(d)
 
@@ -330,155 +330,165 @@ SE = 200 # * 10e9
 vid_len = 600
 dt = 0.05
 
+# create the elements of the structure that are consistent through the whole model
+
+
+
 
 if run_parameter_search:
 
     best_PID = None
     best_squerror = None
 
-    points = {
-        0: Point(-6, -1, 0, True, 0, forces),
-        1: Point(-2, -1, 0, False, 1, forces), #
-        2: Point(2, -1, 0, False, 2, forces), #
-        3: Point(6, -1, 0, True, 3, forces),
-        4: Point(-6, 1, 0, True, 4, forces),
-        5: Point(-2, 1, 0, False, 5, forces), #
-        6: Point(2, 1, 0, False, 6, forces), #
-        7: Point(6, 1, 0, True, 7, forces),
-
-        8: Point(0, -1, -8, True, 8, forces),
-        9: Point(0, 1, -8, True, 9, forces),
-        10: Point(0, -1, 4, False, 10, forces),
-        11: Point(0, 1, 4, False, 11, forces),
-    }
-
-    elts = [
-        LineElement(points[0], points[1], CE, SC, 1), # concrete
-        LineElement(points[1], points[2], CE, SC, 1),
-        LineElement(points[2], points[3], CE, SC, 1),
-        LineElement(points[4], points[5], CE, SC, 1),
-        LineElement(points[5], points[6], CE, SC, 1),
-        LineElement(points[6], points[7], CE, SC, 1),
-        LineElement(points[0], points[4], CE, SC, 1),
-        LineElement(points[1], points[5], CE, SC, 1),
-        LineElement(points[2], points[6], CE, SC, 1),
-        LineElement(points[3], points[7], CE, SC, 1),
-
-        LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
-        LineElement(points[9], points[11], 1000, SS, 0.25),
-
-        LineElement(points[10], points[1], SE, SS, 0.01), # steel
-        LineElement(points[10], points[2], SE, SS, 0.01),
-        LineElement(points[11], points[5], SE, SS, 0.01),
-        LineElement(points[11], points[6], SE, SS, 0.01),
-    ]
-
-    sensors = {
-        1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = False),
-        2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = False),
-        5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = False),
-        6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = False)
-    }
-
-
-    for P in np.arange(0, 0.055, 0.005):
-        for I in np.arange(0, 0.005, 0.001):
-            for D in np.arange(0, 0.055, 0.005):
+    for P in np.arange(0.0, 0.055, 0.005):
+        for I in np.arange(0.0, 0.005, 0.001):
+            for D in np.arange(0.0, 0.055, 0.005):
                 
+                points = {
+                    0: Point(-6, -1, 0, True, 0, forces),
+                    1: Point(-2, -1, 0, False, 1, forces), #
+                    2: Point(2, -1, 0, False, 2, forces), #
+                    3: Point(6, -1, 0, True, 3, forces),
+                    4: Point(-6, 1, 0, True, 4, forces),
+                    5: Point(-2, 1, 0, False, 5, forces), #
+                    6: Point(2, 1, 0, False, 6, forces), #
+                    7: Point(6, 1, 0, True, 7, forces),
 
-                PIDs = {
-                    PID(P, I, D, elts[12], error_function(points[1], sensors[1], elts[12])),
-                    PID(P, I, D, elts[13], error_function(points[2], sensors[2], elts[13])),
-                    PID(P, I, D, elts[14], error_function(points[5], sensors[5], elts[14])),
-                    PID(P, I, D, elts[15], error_function(points[6], sensors[6], elts[15])),
+                    8: Point(0, -1, -8, True, 8, forces),
+                    9: Point(0, 1, -8, True, 9, forces),
+                    10: Point(0, -1, 4, False, 10, forces),
+                    11: Point(0, 1, 4, False, 11, forces),
                 }
 
-                struct = Structure(elts, PIDs, sensors)
+                elts = [
+                    LineElement(points[0], points[1], CE, SC, 1), # concrete
+                    LineElement(points[1], points[2], CE, SC, 1),
+                    LineElement(points[2], points[3], CE, SC, 1),
+                    LineElement(points[4], points[5], CE, SC, 1),
+                    LineElement(points[5], points[6], CE, SC, 1),
+                    LineElement(points[6], points[7], CE, SC, 1),
+                    LineElement(points[0], points[4], CE, SC, 1),
+                    LineElement(points[1], points[5], CE, SC, 1),
+                    LineElement(points[2], points[6], CE, SC, 1),
+                    LineElement(points[3], points[7], CE, SC, 1),
+
+                    LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
+                    LineElement(points[9], points[11], 1000, SS, 0.25),
+
+                    LineElement(points[10], points[1], SE, SS, 0.01), # steel
+                    LineElement(points[10], points[2], SE, SS, 0.01),
+                    LineElement(points[11], points[5], SE, SS, 0.01),
+                    LineElement(points[11], points[6], SE, SS, 0.01),
+                ]
+
+                sensors = {
+                    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = False),
+                    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = False),
+                    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = False),
+                    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = False)
+                }
+
+                erf_1 = error_function(points[1], sensors[1], elts[12])
+                erf_2 = error_function(points[2], sensors[2], elts[13])
+                erf_5 = error_function(points[5], sensors[5], elts[14])
+                erf_6 = error_function(points[6], sensors[6], elts[15])
+                PIDs_search = [
+                    PID(P, I, D, elts[12], erf_1),
+                    PID(P, I, D, elts[13], erf_2),
+                    PID(P, I, D, elts[14], erf_5),
+                    PID(P, I, D, elts[15], erf_6),
+                ]
+
+                struct_search = Structure(elements = elts, PIDs = PIDs_search, sensors = sensors)
 
                 for i in range(vid_len):
-                    struct.timestep(dt)
+                    struct_search.timestep(dt)
 
-                sqerror = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs) * 10
+                sqerror_search = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs_search) * 10
 
-                if not best_PID or sqerror < best_squerror:
+                if not best_PID or sqerror_search < best_squerror:
                     best_PID = (P, I, D)
-                    best_squerror = sqerror
+                    best_squerror = sqerror_search
 
     print(best_PID)
     print(best_squerror)
 
+points = {
+    0: Point(-6, -1, 0, True, 0, forces),
+    1: Point(-2, -1, 0, False, 1, forces), #
+    2: Point(2, -1, 0, False, 2, forces), #
+    3: Point(6, -1, 0, True, 3, forces),
+    4: Point(-6, 1, 0, True, 4, forces),
+    5: Point(-2, 1, 0, False, 5, forces), #
+    6: Point(2, 1, 0, False, 6, forces), #
+    7: Point(6, 1, 0, True, 7, forces),
+
+    8: Point(0, -1, -8, True, 8, forces),
+    9: Point(0, 1, -8, True, 9, forces),
+    10: Point(0, -1, 4, False, 10, forces),
+    11: Point(0, 1, 4, False, 11, forces),
+}
+
+elts = [
+    LineElement(points[0], points[1], CE, SC, 1), # concrete
+    LineElement(points[1], points[2], CE, SC, 1),
+    LineElement(points[2], points[3], CE, SC, 1),
+    LineElement(points[4], points[5], CE, SC, 1),
+    LineElement(points[5], points[6], CE, SC, 1),
+    LineElement(points[6], points[7], CE, SC, 1),
+    LineElement(points[0], points[4], CE, SC, 1),
+    LineElement(points[1], points[5], CE, SC, 1),
+    LineElement(points[2], points[6], CE, SC, 1),
+    LineElement(points[3], points[7], CE, SC, 1),
+
+    LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
+    LineElement(points[9], points[11], 1000, SS, 0.25),
+
+    LineElement(points[10], points[1], SE, SS, 0.01), # steel
+    LineElement(points[10], points[2], SE, SS, 0.01),
+    LineElement(points[11], points[5], SE, SS, 0.01),
+    LineElement(points[11], points[6], SE, SS, 0.01),
+]
+
+sensors = {
+    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = False),
+    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = False),
+    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = False),
+    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = False)
+}
+
+erf_1 = error_function(points[1], sensors[1], elts[12])
+erf_2 = error_function(points[2], sensors[2], elts[13])
+erf_5 = error_function(points[5], sensors[5], elts[14])
+erf_6 = error_function(points[6], sensors[6], elts[15])
+
 if make_animation:
 
     # parameters to make animation
-    Kp = 0
-    Ki = 0
-    Kd = 0.035
+    Kp = 0.0
+    Ki = 0.0
+    Kd = 0.02
 
-    points = {
-        0: Point(-6, -1, 0, True, 0, forces),
-        1: Point(-2, -1, 0, False, 1, forces), #
-        2: Point(2, -1, 0, False, 2, forces), #
-        3: Point(6, -1, 0, True, 3, forces),
-        4: Point(-6, 1, 0, True, 4, forces),
-        5: Point(-2, 1, 0, False, 5, forces), #
-        6: Point(2, 1, 0, False, 6, forces), #
-        7: Point(6, 1, 0, True, 7, forces),
-
-        8: Point(0, -1, -8, True, 8, forces),
-        9: Point(0, 1, -8, True, 9, forces),
-        10: Point(0, -1, 4, False, 10, forces),
-        11: Point(0, 1, 4, False, 11, forces),
-    }
-
-    elts = [
-        LineElement(points[0], points[1], CE, SC, 1), # concrete
-        LineElement(points[1], points[2], CE, SC, 1),
-        LineElement(points[2], points[3], CE, SC, 1),
-        LineElement(points[4], points[5], CE, SC, 1),
-        LineElement(points[5], points[6], CE, SC, 1),
-        LineElement(points[6], points[7], CE, SC, 1),
-        LineElement(points[0], points[4], CE, SC, 1),
-        LineElement(points[1], points[5], CE, SC, 1),
-        LineElement(points[2], points[6], CE, SC, 1),
-        LineElement(points[3], points[7], CE, SC, 1),
-
-        LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
-        LineElement(points[9], points[11], 1000, SS, 0.25),
-
-        LineElement(points[10], points[1], SE, SS, 0.01), # steel
-        LineElement(points[10], points[2], SE, SS, 0.01),
-        LineElement(points[11], points[5], SE, SS, 0.01),
-        LineElement(points[11], points[6], SE, SS, 0.01),
+    PIDs_animate = [            
+            PID(Kp, Ki, Kd, elts[12], erf_1),
+            PID(Kp, Ki, Kd, elts[13], erf_2),
+            PID(Kp, Ki, Kd, elts[14], erf_5),
+            PID(Kp, Ki, Kd, elts[15], erf_6),
     ]
 
-    sensors = {
-        1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = False),
-        2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = False),
-        5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = False),
-        6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = False)
-    }
-
-
-    PIDs = {
-            PID(Kp, Ki, Kd, elts[12], error_function(points[1], sensors[1], elts[12])),
-            PID(Kp, Ki, Kd, elts[13], error_function(points[2], sensors[2], elts[13])),
-            PID(Kp, Ki, Kd, elts[14], error_function(points[5], sensors[5], elts[14])),
-            PID(Kp, Ki, Kd, elts[15], error_function(points[6], sensors[6], elts[15])),
-    }
-
-    struct = Structure(elts, PIDs, sensors)
+    struct_animate = Structure(elements = elts, PIDs = PIDs_animate, sensors = sensors)
 
     with imageio.get_writer(f'{(Kp, Ki, Kd)}.gif', mode='I', fps = math.floor(1/dt)) as writer:
         for i in range(vid_len):
-            struct.timestep(dt)
-            struct.plot(i = i)
+            struct_animate.timestep(dt)
+            struct_animate.plot(i = i)
 
             image = imageio.imread(f"img/{i}.png")
             writer.append_data(image)
 
             plt.close()
 
-    sqerror = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs) * 10
+    sqerror = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs_animate) * 10
 
     fig, ax = plt.subplots()
 
@@ -486,7 +496,7 @@ if make_animation:
     ax.set_ylabel("error")
     ax.set_title(f"Error versus Timestep, {(Kp, Ki, Kd)}, s. sq. er. = {sqerror:0.3f}")
 
-    for controller in PIDs:
+    for controller in PIDs_animate:
         ax.plot(
             controller.evec
         )
