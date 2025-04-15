@@ -258,6 +258,7 @@ class Sensor():
         self.smoothed_accels_vec.append(smoothed)
 
         self.velocity += self.smoothed_accel * dt
+        self.velocities_vec.append(self.smoothed_accel * dt)
 
 class PID():
     def __init__(self, Kp, Ki, Kd, elt, error_func = None):
@@ -310,10 +311,10 @@ forces = {gravity, wind1, wind2}
 
 # delay = 10 # num timesteps to look back
 
-def error_function(point, sensor, elt):
+def error_function(point, sensor, elt, delay = 0):
     # if np.linalg.norm(point.velocity) > 0:
     # return lambda: np.linalg.norm(sensor.smoothed_accel) * point.velocity/np.linalg.norm(point.velocity) @ elt.dir() if np.linalg.norm(point.velocity) > 0 else 0
-    return lambda: np.linalg.norm(sensor.velocity)
+    return lambda: np.linalg.norm(sensor.velocities_vec[-delay]) if len(sensor.velocities_vec) >= delay else np.linalg.norm(sensor.velocity)
     # return lambda: np.linalg.norm(sensor.smoothed_accel_vec[-delay]) if len(sensor.smoothed_accel_vec)>delay else np.linalg.norm(sensor.smoothed_accel)
 
 SC = 3.5 / 10e3 # * 10e6 # concrete yield strength
@@ -332,7 +333,7 @@ dt = 0.05
 
 # create the elements of the structure that are consistent through the whole model
 
-
+delay = 10
 
 
 if run_parameter_search:
@@ -341,7 +342,7 @@ if run_parameter_search:
     best_squerror = None
 
     for P in np.arange(0.0, 0.055, 0.005):
-        for I in np.arange(0.0, 0.005, 0.001):
+        for I in np.arange(0.0, 0.0055, 0.001):
             for D in np.arange(0.0, 0.055, 0.005):
                 
                 points = {
@@ -382,16 +383,17 @@ if run_parameter_search:
                 ]
 
                 sensors = {
-                    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = False),
-                    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = False),
-                    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = False),
-                    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = False)
+                    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
                 }
 
-                erf_1 = error_function(points[1], sensors[1], elts[12])
-                erf_2 = error_function(points[2], sensors[2], elts[13])
-                erf_5 = error_function(points[5], sensors[5], elts[14])
-                erf_6 = error_function(points[6], sensors[6], elts[15])
+                erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
+                erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
+                erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
+                erf_6 = error_function(points[6], sensors[6], elts[15], delay = delay)
+
                 PIDs_search = [
                     PID(P, I, D, elts[12], erf_1),
                     PID(P, I, D, elts[13], erf_2),
@@ -451,23 +453,23 @@ elts = [
 ]
 
 sensors = {
-    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = False),
-    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = False),
-    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = False),
-    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = False)
+    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
 }
 
-erf_1 = error_function(points[1], sensors[1], elts[12])
-erf_2 = error_function(points[2], sensors[2], elts[13])
-erf_5 = error_function(points[5], sensors[5], elts[14])
-erf_6 = error_function(points[6], sensors[6], elts[15])
+erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
+erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
+erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
+erf_6 = error_function(points[6], sensors[6], elts[15], delay = delay)
 
 if make_animation:
 
     # parameters to make animation
-    Kp = 0.0
-    Ki = 0.0
-    Kd = 0.02
+    Kp = 0.015
+    Ki = 0.005
+    Kd = 0.015
 
     PIDs_animate = [            
             PID(Kp, Ki, Kd, elts[12], erf_1),
