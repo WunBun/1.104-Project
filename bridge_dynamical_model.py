@@ -10,6 +10,8 @@ make_animation = True
 
 class Point():
     def __init__(self, x, y, z, fixed, index = 0, applied_forces = set(), mass = 10):
+        self.initial_position = np.array([x, y, z], dtype = float)
+
         self.coords = np.array([x, y, z], dtype = float)
         self.fixed = fixed # True = fixed, False = free
         self.index = index
@@ -67,6 +69,30 @@ class Structure():
         self.PIDs = PIDs
 
         self.C = self.create_connectivity_mat()
+
+        self.t = 0
+
+    def reset(self):
+        for point in self.points:
+            point.coords = point.initial_position
+            point.velocity = np.array([0., 0., 0.])
+            point.acceleration = np.array([0., 0., 0.])
+
+        for pid in self.PIDs:
+            pid.last_e = pid.error_func()
+            pid.e_deriv = 0
+            pid.e_int = 0
+
+            pid.evec = []
+
+        for sensor in self.sensors:
+            sensor.accels_vec = []
+            sensor.smoothed_accels_vec = []
+
+            sensor.velocities_vec = []
+
+            sensor.smoothed_accel = 0.0
+            sensor.velocity = 0.0
 
         self.t = 0
 
