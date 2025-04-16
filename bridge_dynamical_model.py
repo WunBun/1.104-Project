@@ -26,7 +26,7 @@ class Point():
         u_d = d / np.linalg.norm(d)
 
         return u_d
-    
+
     def reset(self):
         self.coords = self.initial_position
         self.velocity = np.array([0., 0., 0.])
@@ -51,21 +51,21 @@ class LineElement():
 
     def dir(self):
         return self.start.dir(self.end)
-    
+
     def len(self):
         delta = [self.end.coords[i] - self.start.coords[i] for i in range(3)]
         return float(np.linalg.norm(delta))
-    
+
     def strain(self):
         return self.len() / self.rest_length - 1
-    
+
     def yielded(self):
         if self.y:
             return True
         else:
             self.y = self.E * self.strain() >= self.sigma_y
             return self.y
-    
+
 class Structure():
     def __init__(self, elements, PIDs, sensors):
         self.elements = elements
@@ -98,7 +98,7 @@ class Structure():
             C[elt.end.index, elt.start.index] = 1
 
         return C
-    
+
     def timestep(self, dt):
         self.t += dt
 
@@ -113,7 +113,7 @@ class Structure():
         #     controller.timestep(dt)
 
         self.applied_forces, self.structural_forces = self.update_velocities(dt)
-    
+
     def update_velocities(self, dt, damping = 0.3):
         applied_forces = {p.index: np.array([0., 0., 0.]) for p in self.points}
 
@@ -121,7 +121,7 @@ class Structure():
 
         for elt in self.elements:
             hook_stress = (elt.len() - elt.rest_length) * elt.E * elt.dir()
-            
+
             structural_forces[elt.start.index] += 1 * hook_stress
 
             structural_forces[elt.end.index] += -1 * hook_stress
@@ -134,18 +134,18 @@ class Structure():
                 point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
                 point.velocity += dt * point.acceleration
 
-        for number, sensor in self.sensors.items(): 
+        for number, sensor in self.sensors.items():
             sensor.observe(dt) # update the acceleration that each sensor reads
-        
+
         return applied_forces, structural_forces
-    
+
     def get_pt_by_ind(self, ind):
         for point in self.points:
             if point.index == ind:
                 return point
-            
+
         return None
-    
+
     def plot(self, i = 0, fig = None, ax = None):
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
         containers = []
@@ -197,9 +197,9 @@ class Structure():
                         color = "green",
                         length = 0.05
                     )
-                
+
                 containers.append(d)
-            
+
         ax.set_box_aspect(
             (np.ptp([pt.coords[0] for pt in self.points]) if np.ptp([pt.coords[0] for pt in self.points]) > 0 else 1,
             np.ptp([pt.coords[1] for pt in self.points]) if np.ptp([pt.coords[1] for pt in self.points]) > 0 else 1,
@@ -207,7 +207,7 @@ class Structure():
         )
 
         # mpl.rcParams['axes3d.mouserotationstyle'] = 'azel' # this is how you interact wiht the plot -- add back in when we want to see
-            
+
         ax.set(xticklabels=[],
             yticklabels=[],
             zticklabels=[])
@@ -217,7 +217,7 @@ class Structure():
         plt.savefig(f"img/{i}.png")
 
         return containers
-    
+
     def step_and_plot(self, frame, fig, ax, dt):
         self.timestep(dt)
         return self.plot(fig, ax)
@@ -237,10 +237,10 @@ class AppliedForce():
             return np.array([0., 0., 0.])
         else:
             return self.magnitude(t) * self.dir
-        
+
 class Sensor():
     def __init__(self, parent = None, alpha = 0.1, noise_std = 0.05, add_noise = True):
-        
+
         self.parent = parent
         self.alpha = alpha
         self.noise_std = noise_std
@@ -259,7 +259,7 @@ class Sensor():
         # self.smoothed_forces = []
 
     def observe(self, dt): # called by the struct update timestep function
-        
+
         accel = self.parent.acceleration
 
         if self.add_noise:
@@ -319,7 +319,7 @@ class PID():
 
     def response(self):
         return (self.Kp * self.error_func() + self.Ki * self.e_int + self.Kd * self.e_deriv)
-    
+
     def apply_response(self):
         n = self.elt.dir()
         u = self.response()
@@ -336,12 +336,12 @@ class PID():
         self.e_int = 0
         self.evec = []
 
-gravity = AppliedForce(0, 100, lambda m: 9.8*m)
+gravity = AppliedForce(0, 100, lambda t: 9.8)
 wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
 wind2 = AppliedForce(0, 100, lambda t: 4 * np.cos(4 * 2 * np.pi * t), [0, 1, 0])
 
-forces = {gravity, wind1, wind2}
-# forces = {gravity}
+#forces = {gravity, wind1, wind2}
+forces = {gravity}
 
 # delay = 10 # num timesteps to look back
 
@@ -381,19 +381,19 @@ dt = 0.05
 delay = 10
 
 points = {
-    0: Point(-6, -1, 0, True, 0, forces),
-    1: Point(-2, -1, 0, False, 1, forces), #
-    2: Point(2, -1, 0, False, 2, forces), #
-    3: Point(6, -1, 0, True, 3, forces),
-    4: Point(-6, 1, 0, True, 4, forces),
-    5: Point(-2, 1, 0, False, 5, forces), #
-    6: Point(2, 1, 0, False, 6, forces), #
-    7: Point(6, 1, 0, True, 7, forces),
+    0: Point(-3/4, -1/4, 0, True, 0, forces),
+    1: Point(-1/4, -1/4, 0, False, 1, forces), #
+    2: Point(1/4, -1/4, 0, False, 2, forces), #
+    3: Point(3/4, -1/4, 0, True, 3, forces),
+    4: Point(-3/4, 1/4, 0, True, 4, forces),
+    5: Point(-1/4, 1/4, 0, False, 5, forces), #
+    6: Point(1/4, 1/4, 0, False, 6, forces), #
+    7: Point(3/4, 1/4, 0, True, 7, forces),
 
-    8: Point(0, -1, -8, True, 8, forces),
-    9: Point(0, 1, -8, True, 9, forces),
-    10: Point(0, -1, 4, False, 10, forces),
-    11: Point(0, 1, 4, False, 11, forces),
+    8: Point(0, -1/4, -8, True, 8, forces),
+    9: Point(0, 1/4, -8, True, 9, forces),
+    10: Point(0, -1/4, 4, False, 10, forces),
+    11: Point(0, 1/4, 4, False, 11, forces),
 }
 
 elts = [
@@ -432,7 +432,7 @@ if run_parameter_search:
     for P in np.arange(0.0, 0.055, 0.005):
         for I in np.arange(0.0, 0.0055, 0.001):
             for D in np.arange(0.0, 0.055, 0.005):
-                
+
 
 
                 erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
@@ -513,11 +513,11 @@ erf_6 = error_function(points[6], sensors[6], elts[15], delay = delay)
 if make_animation:
 
     # parameters to make animation
-    Kp = 0.015
-    Ki = 0.005
-    Kd = 0.015
+    Kp = 0.0
+    Ki = 0.0
+    Kd = 0.0
 
-    PIDs_animate = [            
+    PIDs_animate = [
             PID(Kp, Ki, Kd, elts[12], erf_1),
             PID(Kp, Ki, Kd, elts[13], erf_2),
             PID(Kp, Ki, Kd, elts[14], erf_5),
