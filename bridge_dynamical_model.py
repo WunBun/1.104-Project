@@ -26,6 +26,11 @@ class Point():
         u_d = d / np.linalg.norm(d)
 
         return u_d
+    
+    def reset(self):
+        self.coords = self.initial_position
+        self.velocity = np.array([0., 0., 0.])
+        self.acceleration = np.array([0., 0., 0.])
 
 class LineElement():
     def __init__(self, start, end, k, sigma_y, area):
@@ -74,25 +79,13 @@ class Structure():
 
     def reset(self):
         for point in self.points:
-            point.coords = point.initial_position
-            point.velocity = np.array([0., 0., 0.])
-            point.acceleration = np.array([0., 0., 0.])
+            point.reset()
 
         for pid in self.PIDs:
-            pid.last_e = pid.error_func()
-            pid.e_deriv = 0
-            pid.e_int = 0
-
-            pid.evec = []
+            pid.reset()
 
         for sensor in self.sensors:
-            sensor.accels_vec = []
-            sensor.smoothed_accels_vec = []
-
-            sensor.velocities_vec = []
-
-            sensor.smoothed_accel = 0.0
-            sensor.velocity = 0.0
+            sensor.reset()
 
         self.t = 0
 
@@ -286,6 +279,15 @@ class Sensor():
         self.velocity += self.smoothed_accel * dt
         self.velocities_vec.append(self.smoothed_accel * dt)
 
+    def reset(self):
+        self.accels_vec = []
+        self.smoothed_accels_vec = []
+
+        self.velocities_vec = []
+
+        self.smoothed_accel = 0.0
+        self.velocity = 0.0
+
 class PID():
     def __init__(self, Kp, Ki, Kd, elt, error_func = None):
         self.Kp = Kp
@@ -328,7 +330,13 @@ class PID():
 
         self.elt.rest_length = self.elt.rest_length - u
 
-gravity = AppliedForce(0, 100, lambda t: 9.8)
+    def reset(self):
+        self.last_e = self.error_func()
+        self.e_deriv = 0
+        self.e_int = 0
+        self.evec = []
+
+gravity = AppliedForce(0, 100, lambda m: 9.8*m)
 wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
 wind2 = AppliedForce(0, 100, lambda t: 4 * np.cos(4 * 2 * np.pi * t), [0, 1, 0])
 
@@ -349,6 +357,17 @@ SS = 100 / 10e3 # * 10e6 # steel yield strength
 CE = 40 # * 10e9
 SE = 200 # * 10e9
 
+
+# CONSTANTS TO MATCH PHYSICAL MODEL
+
+# 1 lbf = 4.45 N
+# 39.37 inch = 1 meter
+# k_deck = 2.5 lb in^-1
+# k_cable = 12.5 lb in^-1
+
+k_deck = 2.5/4.45*39.37
+k_cable = 12.5/4.45*39.37
+
 # uncomment below to make interactive view
 # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 # ani = animation.FuncAnimation(fig=fig, func=struct.step_and_plot, frames=40, fargs = (fig, ax, 0.1,), interval=30)
@@ -361,6 +380,49 @@ dt = 0.05
 
 delay = 10
 
+points = {
+    0: Point(-6, -1, 0, True, 0, forces),
+    1: Point(-2, -1, 0, False, 1, forces), #
+    2: Point(2, -1, 0, False, 2, forces), #
+    3: Point(6, -1, 0, True, 3, forces),
+    4: Point(-6, 1, 0, True, 4, forces),
+    5: Point(-2, 1, 0, False, 5, forces), #
+    6: Point(2, 1, 0, False, 6, forces), #
+    7: Point(6, 1, 0, True, 7, forces),
+
+    8: Point(0, -1, -8, True, 8, forces),
+    9: Point(0, 1, -8, True, 9, forces),
+    10: Point(0, -1, 4, False, 10, forces),
+    11: Point(0, 1, 4, False, 11, forces),
+}
+
+elts = [
+    LineElement(points[0], points[1], CE, SC, 1), # concrete
+    LineElement(points[1], points[2], CE, SC, 1),
+    LineElement(points[2], points[3], CE, SC, 1),
+    LineElement(points[4], points[5], CE, SC, 1),
+    LineElement(points[5], points[6], CE, SC, 1),
+    LineElement(points[6], points[7], CE, SC, 1),
+    LineElement(points[0], points[4], CE, SC, 1),
+    LineElement(points[1], points[5], CE, SC, 1),
+    LineElement(points[2], points[6], CE, SC, 1),
+    LineElement(points[3], points[7], CE, SC, 1),
+
+    LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
+    LineElement(points[9], points[11], 1000, SS, 0.25),
+
+    LineElement(points[10], points[1], SE, SS, 0.01), # steel
+    LineElement(points[10], points[2], SE, SS, 0.01),
+    LineElement(points[11], points[5], SE, SS, 0.01),
+    LineElement(points[11], points[6], SE, SS, 0.01),
+]
+
+sensors = {
+    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
+    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
+}
 
 if run_parameter_search:
 
@@ -371,49 +433,7 @@ if run_parameter_search:
         for I in np.arange(0.0, 0.0055, 0.001):
             for D in np.arange(0.0, 0.055, 0.005):
                 
-                points = {
-                    0: Point(-6, -1, 0, True, 0, forces),
-                    1: Point(-2, -1, 0, False, 1, forces), #
-                    2: Point(2, -1, 0, False, 2, forces), #
-                    3: Point(6, -1, 0, True, 3, forces),
-                    4: Point(-6, 1, 0, True, 4, forces),
-                    5: Point(-2, 1, 0, False, 5, forces), #
-                    6: Point(2, 1, 0, False, 6, forces), #
-                    7: Point(6, 1, 0, True, 7, forces),
 
-                    8: Point(0, -1, -8, True, 8, forces),
-                    9: Point(0, 1, -8, True, 9, forces),
-                    10: Point(0, -1, 4, False, 10, forces),
-                    11: Point(0, 1, 4, False, 11, forces),
-                }
-
-                elts = [
-                    LineElement(points[0], points[1], CE, SC, 1), # concrete
-                    LineElement(points[1], points[2], CE, SC, 1),
-                    LineElement(points[2], points[3], CE, SC, 1),
-                    LineElement(points[4], points[5], CE, SC, 1),
-                    LineElement(points[5], points[6], CE, SC, 1),
-                    LineElement(points[6], points[7], CE, SC, 1),
-                    LineElement(points[0], points[4], CE, SC, 1),
-                    LineElement(points[1], points[5], CE, SC, 1),
-                    LineElement(points[2], points[6], CE, SC, 1),
-                    LineElement(points[3], points[7], CE, SC, 1),
-
-                    LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
-                    LineElement(points[9], points[11], 1000, SS, 0.25),
-
-                    LineElement(points[10], points[1], SE, SS, 0.01), # steel
-                    LineElement(points[10], points[2], SE, SS, 0.01),
-                    LineElement(points[11], points[5], SE, SS, 0.01),
-                    LineElement(points[11], points[6], SE, SS, 0.01),
-                ]
-
-                sensors = {
-                    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
-                    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
-                    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
-                    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
-                }
 
                 erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
                 erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
