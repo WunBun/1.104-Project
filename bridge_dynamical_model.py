@@ -339,7 +339,7 @@ class PID():
         self.evec = []
 
 
-gravity = AppliedForce(0, 100, lambda t: 9.8)
+gravity = AppliedForce(0, 100, lambda t: 9.8*0.1)
 wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
 wind2 = AppliedForce(0, 100, lambda t: 4 * np.cos(4 * 2 * np.pi * t), [0, 1, 0])
 
@@ -368,8 +368,12 @@ SE = 200 # * 10e9
 # k_deck = 2.5 lb in^-1
 # k_cable = 12.5 lb in^-1
 
-k_deck = 2.5/4.45*39.37
-k_cable = 12.5/4.45*39.37
+in_to_m = 39.37
+lbf_to_N = 4.45
+
+k_deck = 2.5/lbf_to_N*in_to_m
+k_cable = 12.5/lbf_to_N*in_to_m
+
 
 # uncomment below to make interactive view
 # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
@@ -383,41 +387,99 @@ dt = 0.05
 
 delay = 10
 
-points = {
-    0: Point(-6, -1, 0, True, 0, forces),
-    1: Point(-2, -1, 0, False, 1, forces), #
-    2: Point(2, -1, 0, False, 2, forces), #
-    3: Point(6, -1, 0, True, 3, forces),
-    4: Point(-6, 1, 0, True, 4, forces),
-    5: Point(-2, 1, 0, False, 5, forces), #
-    6: Point(2, 1, 0, False, 6, forces), #
-    7: Point(6, 1, 0, True, 7, forces),
+tower_top = 5.196/in_to_m
+tower_bottom = -2*5.196/in_to_m
 
-    8: Point(0, -1, -8, True, 8, forces),
-    9: Point(0, 1, -8, True, 9, forces),
-    10: Point(0, -1, 4, False, 10, forces),
-    11: Point(0, 1, 4, False, 11, forces),
+front_plane = 0.25*5.196/in_to_m
+back_plane = -0.25*5.196/in_to_m
+
+mid_deck = 3/in_to_m
+end_deck = 9/in_to_m
+
+points = {
+    0: Point(-end_deck, back_plane, 0, True, 0, forces),
+    1: Point(-mid_deck, back_plane, 0, False, 1, forces), #
+    2: Point(mid_deck, back_plane, 0, False, 2, forces), #
+    3: Point(end_deck, back_plane, 0, True, 3, forces),
+
+    4: Point(-end_deck, front_plane, 0, True, 4, forces),
+    5: Point(-mid_deck, front_plane, 0, False, 5, forces), #
+    6: Point(mid_deck, front_plane, 0, False, 6, forces), #
+    7: Point(end_deck, front_plane, 0, True, 7, forces),
+
+    8: Point(0, back_plane, tower_bottom, True, 8, forces),
+    9: Point(0, front_plane, tower_bottom, True, 9, forces),
+    10: Point(0, back_plane, tower_top, False, 10, forces),
+    11: Point(0, front_plane, tower_top, False, 11, forces),
 }
 
-elts = [
-    LineElement(points[0], points[1], CE, SC, 1), # concrete
-    LineElement(points[1], points[2], CE, SC, 1),
-    LineElement(points[2], points[3], CE, SC, 1),
-    LineElement(points[4], points[5], CE, SC, 1),
-    LineElement(points[5], points[6], CE, SC, 1),
-    LineElement(points[6], points[7], CE, SC, 1),
-    LineElement(points[0], points[4], CE, SC, 1),
-    LineElement(points[1], points[5], CE, SC, 1),
-    LineElement(points[2], points[6], CE, SC, 1),
-    LineElement(points[3], points[7], CE, SC, 1),
+# old_points = {
+#     # "left" side
+#     0: Point(-6, -1, 0, True, 0, forces),
+#     1: Point(-2, -1, 0, False, 1, forces), 
+#     2: Point(2, -1, 0, False, 2, forces), 
+#     3: Point(6, -1, 0, True, 3, forces),
 
+#     # "right" side
+#     4: Point(-6, 1, 0, True, 4, forces),
+#     5: Point(-2, 1, 0, False, 5, forces), 
+#     6: Point(2, 1, 0, False, 6, forces), 
+#     7: Point(6, 1, 0, True, 7, forces),
+
+#     # towers
+#     8: Point(0, -1, -8, True, 8, forces),
+#     9: Point(0, 1, -8, True, 9, forces),
+#     10: Point(0, -1, 4, False, 10, forces),
+#     11: Point(0, 1, 4, False, 11, forces),
+# }
+
+# old_elts = [
+    
+#     LineElement(points[0], points[1], CE, SC, 1), # concrete
+#     LineElement(points[1], points[2], CE, SC, 1),
+#     LineElement(points[2], points[3], CE, SC, 1),
+#     LineElement(points[4], points[5], CE, SC, 1),
+#     LineElement(points[5], points[6], CE, SC, 1),
+#     LineElement(points[6], points[7], CE, SC, 1),
+#     LineElement(points[0], points[4], CE, SC, 1),
+#     LineElement(points[1], points[5], CE, SC, 1),
+#     LineElement(points[2], points[6], CE, SC, 1),
+#     LineElement(points[3], points[7], CE, SC, 1),
+
+#     LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
+#     LineElement(points[9], points[11], 1000, SS, 0.25),
+
+#     LineElement(points[10], points[1], SE, SS, 0.01), # steel
+#     LineElement(points[10], points[2], SE, SS, 0.01),
+#     LineElement(points[11], points[5], SE, SS, 0.01),
+#     LineElement(points[11], points[6], SE, SS, 0.01),
+# ]
+
+elts = [
+    
+    # CHANGE YIELD VALUES
+
+    #deck
+    LineElement(points[0], points[1], k_deck, SC, 1), # concrete
+    LineElement(points[1], points[2], k_deck, SC, 1),
+    LineElement(points[2], points[3], k_deck, SC, 1),
+    LineElement(points[4], points[5], k_deck, SC, 1),
+    LineElement(points[5], points[6], k_deck, SC, 1),
+    LineElement(points[6], points[7], k_deck, SC, 1),
+    LineElement(points[0], points[4], k_deck, SC, 1),
+    LineElement(points[1], points[5], k_deck, SC, 1),
+    LineElement(points[2], points[6], k_deck, SC, 1),
+    LineElement(points[3], points[7], k_deck, SC, 1),
+
+    #towers
     LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
     LineElement(points[9], points[11], 1000, SS, 0.25),
 
-    LineElement(points[10], points[1], SE, SS, 0.01), # steel
-    LineElement(points[10], points[2], SE, SS, 0.01),
-    LineElement(points[11], points[5], SE, SS, 0.01),
-    LineElement(points[11], points[6], SE, SS, 0.01),
+    # cables
+    LineElement(points[10], points[1], k_cable, SS, 0.01), # steel
+    LineElement(points[10], points[2], k_cable, SS, 0.01),
+    LineElement(points[11], points[5], k_cable, SS, 0.01),
+    LineElement(points[11], points[6], k_cable, SS, 0.01),
 ]
 
 sensors = {
