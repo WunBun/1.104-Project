@@ -8,6 +8,24 @@ import imageio.v2 as imageio
 run_parameter_search = False
 make_animation = True
 
+
+class AppliedForce():
+    def __init__(self, tstart, tend, magnitude = lambda t: 0, dir = [0, 0, -1]):
+        # magnitude is a function of time
+        # dir is a unit (or unitized) vector
+
+        self.tstart = tstart
+        self.tend = tend
+        self.magnitude = magnitude
+        self.dir = dir / np.linalg.norm(dir)
+
+    def __call__(self, t):
+        if t < self.tstart or t > self.tend:
+            return np.array([0., 0., 0.])
+        else:
+            return self.magnitude(t) * self.dir
+
+
 class Point():
     def __init__(self, x, y, z, fixed, index = 0, applied_forces = set(), mass = 10):
         self.initial_position = np.array([x, y, z], dtype = float)
@@ -222,22 +240,6 @@ class Structure():
         self.timestep(dt)
         return self.plot(fig, ax)
 
-class AppliedForce():
-    def __init__(self, tstart, tend, magnitude = lambda t: 0, dir = [0, 0, -1]):
-        # magnitude is a function of time
-        # dir is a unit (or unitized) vector
-
-        self.tstart = tstart
-        self.tend = tend
-        self.magnitude = magnitude
-        self.dir = dir / np.linalg.norm(dir)
-
-    def __call__(self, t):
-        if t < self.tstart or t > self.tend:
-            return np.array([0., 0., 0.])
-        else:
-            return self.magnitude(t) * self.dir
-
 class Sensor():
     def __init__(self, parent = None, alpha = 0.1, noise_std = 0.05, add_noise = True):
 
@@ -336,6 +338,7 @@ class PID():
         self.e_int = 0
         self.evec = []
 
+
 gravity = AppliedForce(0, 100, lambda t: 9.8)
 wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
 wind2 = AppliedForce(0, 100, lambda t: 4 * np.cos(4 * 2 * np.pi * t), [0, 1, 0])
@@ -379,87 +382,6 @@ dt = 0.05
 # create the elements of the structure that are consistent through the whole model
 
 delay = 10
-
-points = {
-    0: Point(-3/4, -1/4, 0, True, 0, forces),
-    1: Point(-1/4, -1/4, 0, False, 1, forces), #
-    2: Point(1/4, -1/4, 0, False, 2, forces), #
-    3: Point(3/4, -1/4, 0, True, 3, forces),
-    4: Point(-3/4, 1/4, 0, True, 4, forces),
-    5: Point(-1/4, 1/4, 0, False, 5, forces), #
-    6: Point(1/4, 1/4, 0, False, 6, forces), #
-    7: Point(3/4, 1/4, 0, True, 7, forces),
-
-    8: Point(0, -1/4, -8, True, 8, forces),
-    9: Point(0, 1/4, -8, True, 9, forces),
-    10: Point(0, -1/4, 4, False, 10, forces),
-    11: Point(0, 1/4, 4, False, 11, forces),
-}
-
-elts = [
-    LineElement(points[0], points[1], CE, SC, 1), # concrete
-    LineElement(points[1], points[2], CE, SC, 1),
-    LineElement(points[2], points[3], CE, SC, 1),
-    LineElement(points[4], points[5], CE, SC, 1),
-    LineElement(points[5], points[6], CE, SC, 1),
-    LineElement(points[6], points[7], CE, SC, 1),
-    LineElement(points[0], points[4], CE, SC, 1),
-    LineElement(points[1], points[5], CE, SC, 1),
-    LineElement(points[2], points[6], CE, SC, 1),
-    LineElement(points[3], points[7], CE, SC, 1),
-
-    LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
-    LineElement(points[9], points[11], 1000, SS, 0.25),
-
-    LineElement(points[10], points[1], SE, SS, 0.01), # steel
-    LineElement(points[10], points[2], SE, SS, 0.01),
-    LineElement(points[11], points[5], SE, SS, 0.01),
-    LineElement(points[11], points[6], SE, SS, 0.01),
-]
-
-sensors = {
-    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
-    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
-    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
-    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
-}
-
-if run_parameter_search:
-
-    best_PID = None
-    best_squerror = None
-
-    for P in np.arange(0.0, 0.055, 0.005):
-        for I in np.arange(0.0, 0.0055, 0.001):
-            for D in np.arange(0.0, 0.055, 0.005):
-
-
-
-                erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
-                erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
-                erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
-                erf_6 = error_function(points[6], sensors[6], elts[15], delay = delay)
-
-                PIDs_search = [
-                    PID(P, I, D, elts[12], erf_1),
-                    PID(P, I, D, elts[13], erf_2),
-                    PID(P, I, D, elts[14], erf_5),
-                    PID(P, I, D, elts[15], erf_6),
-                ]
-
-                struct_search = Structure(elements = elts, PIDs = PIDs_search, sensors = sensors)
-
-                for i in range(vid_len):
-                    struct_search.timestep(dt)
-
-                sqerror_search = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs_search) * 10
-
-                if not best_PID or sqerror_search < best_squerror:
-                    best_PID = (P, I, D)
-                    best_squerror = sqerror_search
-
-    print(best_PID)
-    print(best_squerror)
 
 points = {
     0: Point(-6, -1, 0, True, 0, forces),
@@ -510,6 +432,44 @@ erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
 erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
 erf_6 = error_function(points[6], sensors[6], elts[15], delay = delay)
 
+
+if run_parameter_search:
+
+    best_PID = None
+    best_squerror = None
+
+    for P in np.arange(0.0, 0.055, 0.005):
+        for I in np.arange(0.0, 0.0055, 0.001):
+            for D in np.arange(0.0, 0.055, 0.005):
+
+
+
+                erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
+                erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
+                erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
+                erf_6 = error_function(points[6], sensors[6], elts[15], delay = delay)
+
+                PIDs_search = [
+                    PID(P, I, D, elts[12], erf_1),
+                    PID(P, I, D, elts[13], erf_2),
+                    PID(P, I, D, elts[14], erf_5),
+                    PID(P, I, D, elts[15], erf_6),
+                ]
+
+                struct_search = Structure(elements = elts, PIDs = PIDs_search, sensors = sensors)
+
+                for i in range(vid_len):
+                    struct_search.timestep(dt)
+
+                sqerror_search = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs_search) * 10
+
+                if not best_PID or sqerror_search < best_squerror:
+                    best_PID = (P, I, D)
+                    best_squerror = sqerror_search
+
+    print(best_PID)
+    print(best_squerror)
+
 if make_animation:
 
     # parameters to make animation
@@ -518,10 +478,10 @@ if make_animation:
     Kd = 0.0
 
     PIDs_animate = [
-            PID(Kp, Ki, Kd, elts[12], erf_1),
-            PID(Kp, Ki, Kd, elts[13], erf_2),
-            PID(Kp, Ki, Kd, elts[14], erf_5),
-            PID(Kp, Ki, Kd, elts[15], erf_6),
+        PID(Kp, Ki, Kd, elts[12], erf_1),
+        PID(Kp, Ki, Kd, elts[13], erf_2),
+        PID(Kp, Ki, Kd, elts[14], erf_5),
+        PID(Kp, Ki, Kd, elts[15], erf_6),
     ]
 
     struct_animate = Structure(elements = elts, PIDs = PIDs_animate, sensors = sensors)
