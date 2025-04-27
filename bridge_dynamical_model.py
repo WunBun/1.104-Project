@@ -25,19 +25,36 @@ class AppliedForce():
         else:
             return self.magnitude(t) * self.dir
 
+class AppliedDisplacement():
+    def __init__(self, tstart, tend, magnitude = lambda t: 0, dir = [0, 1, 0]):
+        # magnitude is a function of time
+        # dir is a unit (or unitized) vector
+
+        self.tstart = tstart
+        self.tend = tend
+        self.magnitude = magnitude
+        self.dir = dir / np.linalg.norm(dir)
+
+    def __call__(self, t):
+        if t < self.tstart or t > self.tend:
+            return np.array([0., 0., 0.])
+        else:
+            return self.magnitude(t) * self.dir
 
 class Point():
-    def __init__(self, x, y, z, fixed, index = 0, applied_forces = set(), mass = 10):
+    def __init__(self, x, y, z, fixed, index = 0, applied_forces = set(), applied_displacements = None, mass = 1):
         self.initial_position = np.array([x, y, z], dtype = float)
 
         self.coords = np.array([x, y, z], dtype = float)
         self.fixed = fixed # True = fixed, False = free
         self.index = index
         self.forces = applied_forces
+        self.displacements = applied_displacements
         self.mass = mass
         self.velocity = np.array([0., 0., 0.])
         self.acceleration = np.array([0., 0., 0.])
         self.connected = set()
+    
 
     def dir(self, other): # vector pointing from this point to another point
         d = [other.coords[i] - self.coords[i] for i in range(3)]
@@ -102,7 +119,7 @@ class Structure():
         for pid in self.PIDs:
             pid.reset()
 
-        for sensor in self.sensors:
+        for number, sensor in self.sensors.items():
             sensor.reset()
 
         self.t = 0
@@ -130,7 +147,15 @@ class Structure():
         # for controller in self.PIDs:
         #     controller.timestep(dt)
 
+        self.update_displacements(dt)
         self.applied_forces, self.structural_forces = self.update_velocities(dt)
+
+    def update_displacements(self, dt):
+        for p in self.points:
+            if p.displacements is not None:
+                for displacement in p.displacements:
+                    p.coords = p.initial_position + displacement.magnitude(self.t)*dt
+        return None
 
     def update_velocities(self, dt, damping = 0.3):
         applied_forces = {p.index: np.array([0., 0., 0.]) for p in self.points}
@@ -149,7 +174,8 @@ class Structure():
 
         for point in self.points:
             if not point.fixed:
-                point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
+                # point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
+                point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass 
                 point.velocity += dt * point.acceleration
 
         for number, sensor in self.sensors.items():
@@ -338,6 +364,7 @@ class PID():
         self.e_int = 0
         self.evec = []
 
+shake = AppliedDisplacement(0, 100, lambda t: np.sin(t))
 
 gravity = AppliedForce(0, 100, lambda t: 9.8*0.1)
 wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
@@ -345,13 +372,15 @@ wind2 = AppliedForce(0, 100, lambda t: 4 * np.cos(4 * 2 * np.pi * t), [0, 1, 0])
 
 #forces = {gravity, wind1, wind2}
 forces = {gravity}
+# displacements = {shake}
+displacements = {shake}
 
 # delay = 10 # num timesteps to look back
 
 def error_function(point, sensor, elt, delay = 0):
     # if np.linalg.norm(point.velocity) > 0:
     # return lambda: np.linalg.norm(sensor.smoothed_accel) * point.velocity/np.linalg.norm(point.velocity) @ elt.dir() if np.linalg.norm(point.velocity) > 0 else 0
-    return lambda: np.linalg.norm(sensor.velocities_vec[-delay]) if len(sensor.velocities_vec) >= delay else np.linalg.norm(sensor.velocity)
+    return lambda: np.linalg.norm(sensor.velocities_vec[-delay] @ elt.dir()) if len(sensor.velocities_vec) >= delay + 1 else np.linalg.norm([0,0,0] @ elt.dir())
     # return lambda: np.linalg.norm(sensor.smoothed_accel_vec[-delay]) if len(sensor.smoothed_accel_vec)>delay else np.linalg.norm(sensor.smoothed_accel)
 
 SC = 3.5 / 10e3 # * 10e6 # concrete yield strength
@@ -397,63 +426,24 @@ mid_deck = 3/in_to_m
 end_deck = 9/in_to_m
 
 points = {
-    0: Point(-end_deck, back_plane, 0, True, 0, forces),
+    #"left" side
+    0: Point(-end_deck, back_plane, 0, True, 0, forces, displacements),
     1: Point(-mid_deck, back_plane, 0, False, 1, forces), #
     2: Point(mid_deck, back_plane, 0, False, 2, forces), #
-    3: Point(end_deck, back_plane, 0, True, 3, forces),
+    3: Point(end_deck, back_plane, 0, True, 3, forces, displacements),
 
-    4: Point(-end_deck, front_plane, 0, True, 4, forces),
+    #"right" side
+    4: Point(-end_deck, front_plane, 0, True, 4, forces, displacements),
     5: Point(-mid_deck, front_plane, 0, False, 5, forces), #
     6: Point(mid_deck, front_plane, 0, False, 6, forces), #
-    7: Point(end_deck, front_plane, 0, True, 7, forces),
+    7: Point(end_deck, front_plane, 0, True, 7, forces, displacements),
 
-    8: Point(0, back_plane, tower_bottom, True, 8, forces),
-    9: Point(0, front_plane, tower_bottom, True, 9, forces),
-    10: Point(0, back_plane, tower_top, False, 10, forces),
-    11: Point(0, front_plane, tower_top, False, 11, forces),
+    #towers
+    8: Point(0, back_plane, tower_bottom, True, 8, forces, displacements),
+    9: Point(0, front_plane, tower_bottom, True, 9, forces, displacements),
+    10: Point(0, back_plane, tower_top, False, 10, forces, displacements),
+    11: Point(0, front_plane, tower_top, False, 11, forces, displacements),
 }
-
-# old_points = {
-#     # "left" side
-#     0: Point(-6, -1, 0, True, 0, forces),
-#     1: Point(-2, -1, 0, False, 1, forces), 
-#     2: Point(2, -1, 0, False, 2, forces), 
-#     3: Point(6, -1, 0, True, 3, forces),
-
-#     # "right" side
-#     4: Point(-6, 1, 0, True, 4, forces),
-#     5: Point(-2, 1, 0, False, 5, forces), 
-#     6: Point(2, 1, 0, False, 6, forces), 
-#     7: Point(6, 1, 0, True, 7, forces),
-
-#     # towers
-#     8: Point(0, -1, -8, True, 8, forces),
-#     9: Point(0, 1, -8, True, 9, forces),
-#     10: Point(0, -1, 4, False, 10, forces),
-#     11: Point(0, 1, 4, False, 11, forces),
-# }
-
-# old_elts = [
-    
-#     LineElement(points[0], points[1], CE, SC, 1), # concrete
-#     LineElement(points[1], points[2], CE, SC, 1),
-#     LineElement(points[2], points[3], CE, SC, 1),
-#     LineElement(points[4], points[5], CE, SC, 1),
-#     LineElement(points[5], points[6], CE, SC, 1),
-#     LineElement(points[6], points[7], CE, SC, 1),
-#     LineElement(points[0], points[4], CE, SC, 1),
-#     LineElement(points[1], points[5], CE, SC, 1),
-#     LineElement(points[2], points[6], CE, SC, 1),
-#     LineElement(points[3], points[7], CE, SC, 1),
-
-#     LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
-#     LineElement(points[9], points[11], 1000, SS, 0.25),
-
-#     LineElement(points[10], points[1], SE, SS, 0.01), # steel
-#     LineElement(points[10], points[2], SE, SS, 0.01),
-#     LineElement(points[11], points[5], SE, SS, 0.01),
-#     LineElement(points[11], points[6], SE, SS, 0.01),
-# ]
 
 elts = [
     
@@ -505,7 +495,6 @@ if run_parameter_search:
             for D in np.arange(0.0, 0.055, 0.005):
 
 
-
                 erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
                 erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
                 erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
@@ -528,6 +517,10 @@ if run_parameter_search:
                 if not best_PID or sqerror_search < best_squerror:
                     best_PID = (P, I, D)
                     best_squerror = sqerror_search
+
+                struct_search.reset()
+
+                
 
     print(best_PID)
     print(best_squerror)
