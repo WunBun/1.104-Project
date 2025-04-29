@@ -100,6 +100,13 @@ class LineElement():
         else:
             self.y = self.E * self.strain() >= self.sigma_y
             return self.y
+        
+    def reset(self):
+        self.y = False
+        self.rest_length = self.ORIG_REST
+        return None
+
+        
 
 class Structure():
     def __init__(self, elements, PIDs, sensors):
@@ -174,8 +181,8 @@ class Structure():
 
         for point in self.points:
             if not point.fixed:
-                # point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
-                point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass 
+                point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
+                # point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass 
                 point.velocity += dt * point.acceleration
 
         for number, sensor in self.sensors.items():
@@ -356,7 +363,11 @@ class PID():
 
         # self.elt.end.coords -= n * u/2
 
-        self.elt.rest_length = self.elt.rest_length - u
+        # SAFE GUARD
+        if self.elt.rest_length >= 0.8*(self.elt.ORIG_REST):
+            self.elt.rest_length = self.elt.rest_length - u
+        else:
+            self.elt.rest_length = self.elt.rest_length
 
     def reset(self):
         self.last_e = self.error_func()
@@ -364,7 +375,7 @@ class PID():
         self.e_int = 0
         self.evec = []
 
-shake = AppliedDisplacement(0, 100, lambda t: np.sin(t))
+shake = AppliedDisplacement(25, 75, lambda t: np.sin(t))
 
 gravity = AppliedForce(0, 100, lambda t: 9.8*0.1)
 wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
@@ -377,10 +388,13 @@ displacements = {shake}
 
 # delay = 10 # num timesteps to look back
 
+
+#something wrong in error function
 def error_function(point, sensor, elt, delay = 0):
     # if np.linalg.norm(point.velocity) > 0:
     # return lambda: np.linalg.norm(sensor.smoothed_accel) * point.velocity/np.linalg.norm(point.velocity) @ elt.dir() if np.linalg.norm(point.velocity) > 0 else 0
-    return lambda: np.linalg.norm(sensor.velocities_vec[-delay] @ elt.dir()) if len(sensor.velocities_vec) >= delay + 1 else np.linalg.norm([0,0,0] @ elt.dir())
+    return lambda: np.linalg.norm(point.velocity)
+    # return lambda: np.linalg.norm(sensor.velocities_vec[-delay]) if len(sensor.velocities_vec) >= delay + 1 else np.linalg.norm([0,0,0])        
     # return lambda: np.linalg.norm(sensor.smoothed_accel_vec[-delay]) if len(sensor.smoothed_accel_vec)>delay else np.linalg.norm(sensor.smoothed_accel)
 
 SC = 3.5 / 10e3 # * 10e6 # concrete yield strength
@@ -495,15 +509,69 @@ if run_parameter_search:
             for D in np.arange(0.0, 0.055, 0.005):
 
 
+                points = {
+                    #"left" side
+                    0: Point(-end_deck, back_plane, 0, True, 0, forces, displacements),
+                    1: Point(-mid_deck, back_plane, 0, False, 1, forces), #
+                    2: Point(mid_deck, back_plane, 0, False, 2, forces), #
+                    3: Point(end_deck, back_plane, 0, True, 3, forces, displacements),
+
+                    #"right" side
+                    4: Point(-end_deck, front_plane, 0, True, 4, forces, displacements),
+                    5: Point(-mid_deck, front_plane, 0, False, 5, forces), #
+                    6: Point(mid_deck, front_plane, 0, False, 6, forces), #
+                    7: Point(end_deck, front_plane, 0, True, 7, forces, displacements),
+
+                    #towers
+                    8: Point(0, back_plane, tower_bottom, True, 8, forces, displacements),
+                    9: Point(0, front_plane, tower_bottom, True, 9, forces, displacements),
+                    10: Point(0, back_plane, tower_top, False, 10, forces, displacements),
+                    11: Point(0, front_plane, tower_top, False, 11, forces, displacements),
+                }
+
+                elts = [
+                    
+                    # CHANGE YIELD VALUES
+
+                    #deck
+                    LineElement(points[0], points[1], k_deck, SC, 1), # concrete
+                    LineElement(points[1], points[2], k_deck, SC, 1),
+                    LineElement(points[2], points[3], k_deck, SC, 1),
+                    LineElement(points[4], points[5], k_deck, SC, 1),
+                    LineElement(points[5], points[6], k_deck, SC, 1),
+                    LineElement(points[6], points[7], k_deck, SC, 1),
+                    LineElement(points[0], points[4], k_deck, SC, 1),
+                    LineElement(points[1], points[5], k_deck, SC, 1),
+                    LineElement(points[2], points[6], k_deck, SC, 1),
+                    LineElement(points[3], points[7], k_deck, SC, 1),
+
+                    #towers
+                    LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
+                    LineElement(points[9], points[11], 1000, SS, 0.25),
+
+                    # cables
+                    LineElement(points[10], points[1], k_cable, SS, 0.01), # steel
+                    LineElement(points[10], points[2], k_cable, SS, 0.01),
+                    LineElement(points[11], points[5], k_cable, SS, 0.01),
+                    LineElement(points[11], points[6], k_cable, SS, 0.01),
+                ]
+
+                sensors = {
+                    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
+                    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
+                }
+
                 erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
-                erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
-                erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
+                # erf_2 = error_function(points[2], sensors[2], elts[13], delay = delay)
+                # erf_5 = error_function(points[5], sensors[5], elts[14], delay = delay)
                 erf_6 = error_function(points[6], sensors[6], elts[15], delay = delay)
 
                 PIDs_search = [
                     PID(P, I, D, elts[12], erf_1),
-                    PID(P, I, D, elts[13], erf_2),
-                    PID(P, I, D, elts[14], erf_5),
+                    # PID(P, I, D, elts[13], erf_2),
+                    # PID(P, I, D, elts[14], erf_5),
                     PID(P, I, D, elts[15], erf_6),
                 ]
 
@@ -518,7 +586,15 @@ if run_parameter_search:
                     best_PID = (P, I, D)
                     best_squerror = sqerror_search
 
-                struct_search.reset()
+                for num, point in points.items():
+                    point.reset()
+                for elt in elts:
+                    elt.reset()
+                for num, sensor in sensors.items():
+                    sensor.reset()
+                for pid in PIDs_search:
+                    pid.reset()
+                
 
                 
 
@@ -529,13 +605,13 @@ if make_animation:
 
     # parameters to make animation
     Kp = 0.0
-    Ki = 0.0
+    Ki = 0.004
     Kd = 0.0
 
     PIDs_animate = [
         PID(Kp, Ki, Kd, elts[12], erf_1),
-        PID(Kp, Ki, Kd, elts[13], erf_2),
-        PID(Kp, Ki, Kd, elts[14], erf_5),
+        # PID(Kp, Ki, Kd, elts[13], erf_2),
+        # PID(Kp, Ki, Kd, elts[14], erf_5),
         PID(Kp, Ki, Kd, elts[15], erf_6),
     ]
 
