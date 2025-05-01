@@ -42,7 +42,7 @@ class AppliedDisplacement():
             return self.magnitude(t) * self.dir
 
 class Point():
-    def __init__(self, x, y, z, fixed, index = 0, applied_forces = set(), applied_displacements = None, mass = 1):
+    def __init__(self, x, y, z, fixed, index = 0, applied_forces = set(), applied_displacements = None, mass = 0.1):
         self.initial_position = np.array([x, y, z], dtype = float)
 
         self.coords = np.array([x, y, z], dtype = float)
@@ -68,7 +68,7 @@ class Point():
         self.acceleration = np.array([0., 0., 0.])
 
 class LineElement():
-    def __init__(self, start, end, k, sigma_y, area):
+    def __init__(self, start, end, k, sigma_y, area, initial_stretch = 0):
         self.E = k
         self.sigma_y = sigma_y
         self.area = area # cross-sectional area in square meters
@@ -79,8 +79,10 @@ class LineElement():
         self.start.connected.add(self.end)
         self.end.connected.add(self.start)
 
-        self.rest_length = self.len()
-        self.ORIG_REST = self.len()
+        self.initial_stretch = initial_stretch
+
+        self.rest_length = self.len()-initial_stretch
+        self.ORIG_REST = self.len()-initial_stretch
 
         self.y = False # if yielded already
 
@@ -157,6 +159,8 @@ class Structure():
         self.update_displacements(dt)
         self.applied_forces, self.structural_forces = self.update_velocities(dt)
 
+        print(f"on point 6 applied forces are {np.linalg.norm(self.applied_forces[6])}, structural_forces are {np.linalg.norm(self.structural_forces[6])}")
+
     def update_displacements(self, dt):
         for p in self.points:
             if p.displacements is not None:
@@ -164,17 +168,22 @@ class Structure():
                     p.coords = p.initial_position + displacement.magnitude(self.t)*dt
         return None
 
-    def update_velocities(self, dt, damping = 0.3):
+    def update_velocities(self, dt, damping = 1):
         applied_forces = {p.index: np.array([0., 0., 0.]) for p in self.points}
 
         structural_forces = {p.index: np.array([0., 0., 0.]) for p in self.points}
 
-        for elt in self.elements:
+        for i, elt in enumerate(self.elements):
             hook_stress = (elt.len() - elt.rest_length) * elt.E * elt.dir()
 
             structural_forces[elt.start.index] += 1 * hook_stress
 
             structural_forces[elt.end.index] += -1 * hook_stress
+            if i == 15:
+                print(f"hook stress is {np.linalg.norm(hook_stress)} and the other ones are {structural_forces[elt.start.index]} and {structural_forces[elt.end.index]}")
+
+
+
 
         for pt in self.points:
             applied_forces[pt.index] += sum(force(self.t) for force in pt.forces)
@@ -184,6 +193,7 @@ class Structure():
                 point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass - (damping/point.mass) * point.velocity
                 # point.acceleration = (applied_forces[point.index] + structural_forces[point.index]) / point.mass 
                 point.velocity += dt * point.acceleration
+                point.velocity += dt * np.array([0, 0, -9.8])
 
         for number, sensor in self.sensors.items():
             sensor.observe(dt) # update the acceleration that each sensor reads
@@ -364,7 +374,7 @@ class PID():
         # self.elt.end.coords -= n * u/2
 
         # SAFE GUARD
-        if self.elt.rest_length >= 0.8*(self.elt.ORIG_REST):
+        if self.elt.rest_length >= 0.9*(self.elt.ORIG_REST):
             self.elt.rest_length = self.elt.rest_length - u
         else:
             self.elt.rest_length = self.elt.rest_length
@@ -375,16 +385,17 @@ class PID():
         self.e_int = 0
         self.evec = []
 
-shake = AppliedDisplacement(25, 75, lambda t: np.sin(t))
+shake = AppliedDisplacement(25, 100, lambda t: np.sin(t))
 
-gravity = AppliedForce(0, 100, lambda t: 9.8*0.1)
+gravity = AppliedForce(0, 10000, lambda t: 9.8)
 wind1 = AppliedForce(0, 100, lambda t: 2 * np.sin(2 * 2 * np.pi * t), [1, 0, 0])
 wind2 = AppliedForce(0, 100, lambda t: 4 * np.cos(4 * 2 * np.pi * t), [0, 1, 0])
 
 #forces = {gravity, wind1, wind2}
-forces = {gravity}
+# forces = {gravity}
+forces = set()
+displacements = None
 # displacements = {shake}
-displacements = {shake}
 
 # delay = 10 # num timesteps to look back
 
@@ -414,49 +425,54 @@ SE = 200 # * 10e9
 in_to_m = 39.37
 lbf_to_N = 4.45
 
-k_deck = 2.5/lbf_to_N*in_to_m
-k_cable = 12.5/lbf_to_N*in_to_m
+# k_deck = 2.5/lbf_to_N*in_to_m
+# k_cable = 12.5/lbf_to_N*in_to_m
 
+k_deck = 0.4/lbf_to_N*in_to_m
+k_cable = 6 * k_deck
+k_tower = 10 * k_cable
 
 # uncomment below to make interactive view
 # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 # ani = animation.FuncAnimation(fig=fig, func=struct.step_and_plot, frames=40, fargs = (fig, ax, 0.1,), interval=30)
 # plt.show()
 
-vid_len = 600
-dt = 0.05
+vid_len = 100
+dt = 0.005
 
 # create the elements of the structure that are consistent through the whole model
 
 delay = 10
 
-tower_top = 5.196/in_to_m
-tower_bottom = -2*5.196/in_to_m
+tower_top = 5/in_to_m
+tower_bottom = -2*5/in_to_m
 
-front_plane = 0.25*5.196/in_to_m
-back_plane = -0.25*5.196/in_to_m
+front_plane = 4/in_to_m
+back_plane = -4/in_to_m
 
-mid_deck = 3/in_to_m
-end_deck = 9/in_to_m
+mid_deck = 5/in_to_m
+end_deck = 13/in_to_m
+
+point_masses = 0.1
 
 points = {
     #"left" side
-    0: Point(-end_deck, back_plane, 0, True, 0, forces, displacements),
-    1: Point(-mid_deck, back_plane, 0, False, 1, forces), #
-    2: Point(mid_deck, back_plane, 0, False, 2, forces), #
-    3: Point(end_deck, back_plane, 0, True, 3, forces, displacements),
+    0: Point(-end_deck, back_plane, 0, True, 0, forces, displacements, mass = point_masses),
+    1: Point(-mid_deck, back_plane, 0, False, 1, forces, mass = point_masses),
+    2: Point(mid_deck, back_plane, 0, False, 2, forces, mass = point_masses),
+    3: Point(end_deck, back_plane, 0, True, 3, forces, displacements, mass = point_masses),
 
     #"right" side
-    4: Point(-end_deck, front_plane, 0, True, 4, forces, displacements),
-    5: Point(-mid_deck, front_plane, 0, False, 5, forces), #
-    6: Point(mid_deck, front_plane, 0, False, 6, forces), #
-    7: Point(end_deck, front_plane, 0, True, 7, forces, displacements),
+    4: Point(-end_deck, front_plane, 0, True, 4, forces, displacements, mass = point_masses),
+    5: Point(-mid_deck, front_plane, 0, False, 5, forces, mass = point_masses),
+    6: Point(mid_deck, front_plane, 0, False, 6, forces, mass = point_masses),
+    7: Point(end_deck, front_plane, 0, True, 7, forces, displacements, mass = point_masses),
 
     #towers
-    8: Point(0, back_plane, tower_bottom, True, 8, forces, displacements),
-    9: Point(0, front_plane, tower_bottom, True, 9, forces, displacements),
-    10: Point(0, back_plane, tower_top, False, 10, forces, displacements),
-    11: Point(0, front_plane, tower_top, False, 11, forces, displacements),
+    8: Point(0, back_plane, tower_bottom, True, 8, forces, displacements, mass = point_masses),
+    9: Point(0, front_plane, tower_bottom, True, 9, forces, displacements, mass = point_masses),
+    10: Point(0, back_plane, tower_top, False, 10, forces, displacements, mass = point_masses),
+    11: Point(0, front_plane, tower_top, False, 11, forces, displacements, mass = point_masses),
 }
 
 elts = [
@@ -464,33 +480,33 @@ elts = [
     # CHANGE YIELD VALUES
 
     #deck
-    LineElement(points[0], points[1], k_deck, SC, 1), # concrete
-    LineElement(points[1], points[2], k_deck, SC, 1),
-    LineElement(points[2], points[3], k_deck, SC, 1),
-    LineElement(points[4], points[5], k_deck, SC, 1),
-    LineElement(points[5], points[6], k_deck, SC, 1),
-    LineElement(points[6], points[7], k_deck, SC, 1),
-    LineElement(points[0], points[4], k_deck, SC, 1),
-    LineElement(points[1], points[5], k_deck, SC, 1),
-    LineElement(points[2], points[6], k_deck, SC, 1),
-    LineElement(points[3], points[7], k_deck, SC, 1),
+    LineElement(points[0], points[1], k_deck, SC, 1, initial_stretch = 0.0254), # concrete
+    LineElement(points[1], points[2], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[2], points[3], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[4], points[5], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[5], points[6], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[6], points[7], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[0], points[4], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[1], points[5], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[2], points[6], k_deck, SC, 1, initial_stretch = 0.0254),
+    LineElement(points[3], points[7], k_deck, SC, 1, initial_stretch = 0.0254),
 
     #towers
-    LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
-    LineElement(points[9], points[11], 1000, SS, 0.25),
+    LineElement(points[8], points[10], k_tower, SS, 0.25), # pillars
+    LineElement(points[9], points[11], k_tower, SS, 0.25),
 
     # cables
-    LineElement(points[10], points[1], k_cable, SS, 0.01), # steel
-    LineElement(points[10], points[2], k_cable, SS, 0.01),
-    LineElement(points[11], points[5], k_cable, SS, 0.01),
-    LineElement(points[11], points[6], k_cable, SS, 0.01),
+    LineElement(points[10], points[1], k_cable, SS, 0.01, initial_stretch = 0.0254), # steel
+    LineElement(points[10], points[2], k_cable, SS, 0.01, initial_stretch = 0.0254),
+    LineElement(points[11], points[5], k_cable, SS, 0.01, initial_stretch = 0.0254),
+    LineElement(points[11], points[6], k_cable, SS, 0.01, initial_stretch = 0.0254),
 ]
 
 sensors = {
-    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.1, add_noise = True),
-    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.1, add_noise = True),
-    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.1, add_noise = True),
-    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.1, add_noise = True)
+    1: Sensor(parent = points[1], alpha = 0.5, noise_std = 0.001, add_noise = True),
+    2: Sensor(parent = points[2], alpha = 0.5, noise_std = 0.001, add_noise = True),
+    5: Sensor(parent = points[5], alpha = 0.5, noise_std = 0.001, add_noise = True),
+    6: Sensor(parent = points[6], alpha = 0.5, noise_std = 0.001, add_noise = True)
 }
 
 erf_1 = error_function(points[1], sensors[1], elts[12], delay = delay)
@@ -530,30 +546,30 @@ if run_parameter_search:
                 }
 
                 elts = [
-                    
+    
                     # CHANGE YIELD VALUES
 
                     #deck
-                    LineElement(points[0], points[1], k_deck, SC, 1), # concrete
-                    LineElement(points[1], points[2], k_deck, SC, 1),
-                    LineElement(points[2], points[3], k_deck, SC, 1),
-                    LineElement(points[4], points[5], k_deck, SC, 1),
-                    LineElement(points[5], points[6], k_deck, SC, 1),
-                    LineElement(points[6], points[7], k_deck, SC, 1),
-                    LineElement(points[0], points[4], k_deck, SC, 1),
-                    LineElement(points[1], points[5], k_deck, SC, 1),
-                    LineElement(points[2], points[6], k_deck, SC, 1),
-                    LineElement(points[3], points[7], k_deck, SC, 1),
+                    LineElement(points[0], points[1], k_deck, SC, 1, initial_stretch = 0.0254), # concrete
+                    LineElement(points[1], points[2], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[2], points[3], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[4], points[5], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[5], points[6], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[6], points[7], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[0], points[4], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[1], points[5], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[2], points[6], k_deck, SC, 1, initial_stretch = 0.0254),
+                    LineElement(points[3], points[7], k_deck, SC, 1, initial_stretch = 0.0254),
 
                     #towers
                     LineElement(points[8], points[10], 1000, SS, 0.25), # pillars
                     LineElement(points[9], points[11], 1000, SS, 0.25),
 
                     # cables
-                    LineElement(points[10], points[1], k_cable, SS, 0.01), # steel
-                    LineElement(points[10], points[2], k_cable, SS, 0.01),
-                    LineElement(points[11], points[5], k_cable, SS, 0.01),
-                    LineElement(points[11], points[6], k_cable, SS, 0.01),
+                    LineElement(points[10], points[1], k_cable, SS, 0.01, initial_stretch = 0.0254), # steel
+                    LineElement(points[10], points[2], k_cable, SS, 0.01, initial_stretch = 0.0254),
+                    LineElement(points[11], points[5], k_cable, SS, 0.01, initial_stretch = 0.0254),
+                    LineElement(points[11], points[6], k_cable, SS, 0.01, initial_stretch = 0.0254),
                 ]
 
                 sensors = {
@@ -605,7 +621,7 @@ if make_animation:
 
     # parameters to make animation
     Kp = 0.0
-    Ki = 0.004
+    Ki = 0.0
     Kd = 0.0
 
     PIDs_animate = [
@@ -616,6 +632,9 @@ if make_animation:
     ]
 
     struct_animate = Structure(elements = elts, PIDs = PIDs_animate, sensors = sensors)
+    # for i in np.arange(0,2000):
+    #     struct_animate.timestep(dt)
+    
 
     with imageio.get_writer(f'{(Kp, Ki, Kd)}.gif', mode='I', fps = math.floor(1/dt)) as writer:
         for i in range(vid_len):
