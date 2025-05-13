@@ -170,7 +170,7 @@ class Structure():
                     p.coords = p.initial_position + displacement.magnitude(self.t)*dt
         return None
 
-    def update_velocities(self, dt, damping=0.01):
+    def update_velocities(self, dt, damping=0.1):
         applied_forces = {p.index: np.array([0., 0., 0.]) for p in self.points}
 
         structural_forces = {p.index: np.array([0., 0., 0.]) for p in self.points}
@@ -446,7 +446,7 @@ k_tower = 1000 * k_cable
 # ani = animation.FuncAnimation(fig=fig, func=struct.step_and_plot, frames=40, fargs = (fig, ax, 0.1,), interval=30)
 # plt.show()
 
-vid_len = 24000
+vid_len = 700
 dt = 0.05
 
 # create the elements of the structure that are consistent through the whole model
@@ -670,9 +670,9 @@ if run_parameter_search:
 if make_animation:
 
     # parameters to make animation
-    Kp = 0
-    Ki = 0
-    Kd = 0
+    Kp = 1.5
+    Ki = 0.0
+    Kd = 0.5
 
     PIDs_animate = [
         PID(Kp, Ki, Kd, elts[14], erf_1),
@@ -686,12 +686,12 @@ if make_animation:
     with imageio.get_writer(f'{(Kp, Ki, Kd)}.gif', mode='I', fps = math.floor(1/dt)) as writer:
         for i in range(vid_len):
             struct_animate.timestep(dt)
-            # struct_animate.plot(i = i)
+            struct_animate.plot(i = i)
 
-            # image = imageio.imread(f"img/{i}.png")
-            # writer.append_data(image)
+            image = imageio.imread(f"img/{i}.png")
+            writer.append_data(image)
 
-            # plt.close()
+            plt.close()
 
     sqerror = sum(sum(dt * e ** 2 for e in controller.evec) for controller in PIDs_animate)
 
